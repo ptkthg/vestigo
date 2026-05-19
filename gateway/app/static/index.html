@@ -100,11 +100,43 @@
         </button>
       </div>
 
-      <div id="progressBar" class="progress-bar hidden">
-        <div class="progress-stages">
-          <span id="stageParser"   class="stage">01 · Parser</span>
-          <span id="stageEnricher" class="stage">02 · Enricher</span>
-          <span id="stageAI"       class="stage">03 · Análise IA</span>
+      <div id="progressBar" class="pipeline-wrap hidden">
+        <div class="pipeline-stages">
+
+          <div id="pstParser" class="pstage">
+            <div class="pstage-dot">
+              <svg class="pstage-check" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <span class="pstage-label">Parser</span>
+          </div>
+
+          <div id="pconn1" class="pconn"></div>
+
+          <div id="pstEnricher" class="pstage">
+            <div class="pstage-dot">
+              <svg class="pstage-check" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <span class="pstage-label">Enricher</span>
+          </div>
+
+          <div id="pconn2" class="pconn"></div>
+
+          <div id="pstAI" class="pstage">
+            <div class="pstage-dot">
+              <svg class="pstage-check" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <span class="pstage-label">IA</span>
+          </div>
+
+        </div>
+
+        <div class="pipeline-bar">
+          <div id="pipelineFill" class="pipeline-fill"></div>
+        </div>
+
+        <div class="pipeline-footer">
+          <span id="pipelineAction" class="pipeline-action"></span>
+          <span id="pipelineTimer" class="pipeline-timer">0s</span>
         </div>
       </div>
 

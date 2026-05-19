@@ -59,20 +59,62 @@ function exportPDF() {
   window.print();
 }
 
-// ── Progress stages ───────────────────────────────────────────────────────────
+// ── Pipeline visual ───────────────────────────────────────────────────────────
+const _pStageIds  = { parser: 'pstParser', enricher: 'pstEnricher', ai: 'pstAI' };
+const _pConnIds   = { enricher: 'pconn1', ai: 'pconn2' };
+const _pFillPct   = { parser: 28, enricher: 62, ai: 90 };
+const _pOrder     = ['parser', 'enricher', 'ai'];
+
+const _pMsgs = {
+  parser:   ['Detectando formato do log...', 'Mascarando dados sensiveis (PII)...', 'Extraindo indicadores de comprometimento...'],
+  enricher: ['Consultando reputacao de IPs (AbuseIPDB)...', 'Verificando hashes e dominios (VirusTotal)...', 'Mapeando tecnicas MITRE ATT&CK...'],
+  ai:       ['Contextualizando evento de seguranca...', 'Analisando padroes e hipoteses...', 'Gerando recomendacoes e queries...'],
+};
+
+let _pTimerInterval = null;
+let _pMsgInterval   = null;
+let _pStartTime     = 0;
+let _pMsgIndex      = 0;
+
 function setStage(stage) {
-  const ids = { parser: 'stageParser', enricher: 'stageEnricher', ai: 'stageAI' };
-  Object.entries(ids).forEach(([key, id]) => {
-    const el = document.getElementById(id);
+  const order = _pOrder.indexOf(stage);
+  if (order === -1) return;
+
+  // mark done stages
+  _pOrder.forEach((s, i) => {
+    const el = document.getElementById(_pStageIds[s]);
     if (!el) return;
-    el.className = 'stage';
-    if (key === stage) el.classList.add('active');
-    else if (stageOrder(key) < stageOrder(stage)) el.classList.add('done');
+    el.className = 'pstage';
+    if (i < order) {
+      el.classList.add('done');
+      const conn = _pConnIds[_pOrder[i + 1]];
+      if (conn) document.getElementById(conn)?.classList.add('done');
+    } else if (i === order) {
+      el.classList.add('active');
+    }
   });
+
+  // fill bar
+  const fill = document.getElementById('pipelineFill');
+  if (fill) fill.style.width = _pFillPct[stage] + '%';
+
+  // cycle messages
+  if (_pMsgInterval) clearInterval(_pMsgInterval);
+  _pMsgIndex = 0;
+  _setAction(_pMsgs[stage][0]);
+  _pMsgInterval = setInterval(() => {
+    _pMsgIndex = (_pMsgIndex + 1) % _pMsgs[stage].length;
+    _setAction(_pMsgs[stage][_pMsgIndex]);
+  }, 1400);
+}
+
+function _setAction(msg) {
+  const el = document.getElementById('pipelineAction');
+  if (el) el.textContent = msg;
 }
 
 function stageOrder(s) {
-  return { parser: 0, enricher: 1, ai: 2 }[s] ?? -1;
+  return _pOrder.indexOf(s);
 }
 
 // ── Main analyze (SSE streaming) ──────────────────────────────────────────────
@@ -339,11 +381,50 @@ function setLoading(on) {
 }
 
 function showProgress() {
+  // reset all stages
+  Object.values(_pStageIds).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.className = 'pstage';
+  });
+  Object.values(_pConnIds).forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.className = 'pconn';
+  });
+  const fill = document.getElementById('pipelineFill');
+  if (fill) fill.style.width = '4%';
+
   document.getElementById('progressBar').classList.remove('hidden');
+
+  // start timer
+  _pStartTime = Date.now();
+  const timerEl = document.getElementById('pipelineTimer');
+  if (timerEl) timerEl.textContent = '0s';
+  if (_pTimerInterval) clearInterval(_pTimerInterval);
+  _pTimerInterval = setInterval(() => {
+    const s = Math.floor((Date.now() - _pStartTime) / 1000);
+    if (timerEl) timerEl.textContent = s + 's';
+  }, 1000);
+
   setStage('parser');
 }
+
 function hideProgress() {
-  document.getElementById('progressBar').classList.add('hidden');
+  if (_pMsgInterval) { clearInterval(_pMsgInterval); _pMsgInterval = null; }
+  if (_pTimerInterval) { clearInterval(_pTimerInterval); _pTimerInterval = null; }
+
+  // flash 100% done before hiding
+  const fill = document.getElementById('pipelineFill');
+  if (fill) fill.style.width = '100%';
+  _pOrder.forEach(s => {
+    document.getElementById(_pStageIds[s])?.classList.replace('active', 'done') ||
+    document.getElementById(_pStageIds[s])?.classList.add('done');
+  });
+  Object.values(_pConnIds).forEach(id => document.getElementById(id)?.classList.add('done'));
+  _setAction('Analise concluida.');
+
+  setTimeout(() => {
+    document.getElementById('progressBar').classList.add('hidden');
+  }, 600);
 }
 function showError(msg) {
   const el = document.getElementById('errorBanner');
