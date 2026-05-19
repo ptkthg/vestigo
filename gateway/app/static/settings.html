@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vestigo — Configurações</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          <path d="M11 8v6M8 11h6" stroke-width="1.5"/>
+        </svg>
+        VESTIGO
+      </div>
+      <nav class="header-nav">
+        <a href="/" class="nav-link">Analisar</a>
+        <a href="/history.html" class="nav-link">Histórico</a>
+        <a href="/dashboard.html" class="nav-link">Dashboard</a>
+        <a href="/settings.html" class="nav-link active">Configurações</a>
+      </nav>
+      <span class="tagline">SOC Intelligence Platform</span>
+    </div>
+  </header>
+
+  <main class="main" style="max-width:760px">
+    <div class="page-title">Contexto Organizacional</div>
+
+    <p style="color:var(--text-2);font-size:13px;margin-bottom:24px;line-height:1.7">
+      Estas informações são enviadas à IA antes de cada análise para reduzir falsos positivos.
+      IPs internos, ferramentas autorizadas e usuários privilegiados ajudam a IA a distinguir
+      atividade legítima de ameaças reais.
+    </p>
+
+    <form id="settingsForm" onsubmit="saveConfig(event)">
+
+      <div class="card settings-card">
+        <div class="card-label">Identificação</div>
+        <div class="field-group">
+          <label class="field-label" for="orgName">Nome da organização</label>
+          <input id="orgName" type="text" class="field-input" placeholder="Ex: Acme Corp SOC" />
+        </div>
+      </div>
+
+      <div class="card settings-card">
+        <div class="card-label">Redes Internas</div>
+        <p class="field-hint">IPs nesses intervalos serão tratados como internos pela IA. Um por linha.</p>
+        <div class="field-group">
+          <label class="field-label" for="internalCidrs">CIDRs internos</label>
+          <textarea id="internalCidrs" class="field-textarea" rows="4"
+            placeholder="10.0.0.0/8&#10;172.16.0.0/12&#10;192.168.0.0/16"></textarea>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="trustedIps">IPs confiáveis específicos</label>
+          <textarea id="trustedIps" class="field-textarea" rows="3"
+            placeholder="10.10.1.5 (scanner Tenable)&#10;192.168.1.100 (SIEM)"></textarea>
+        </div>
+      </div>
+
+      <div class="card settings-card">
+        <div class="card-label">Ferramentas e Usuários Autorizados</div>
+        <p class="field-hint">Evita falsos positivos de ferramentas legítimas e contas de serviço. Um por linha.</p>
+        <div class="field-group">
+          <label class="field-label" for="authorizedTools">Ferramentas autorizadas</label>
+          <textarea id="authorizedTools" class="field-textarea" rows="3"
+            placeholder="Tenable Nessus&#10;Nmap (time de segurança)&#10;CrowdStrike Falcon"></textarea>
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="privilegedUsers">Contas privilegiadas conhecidas</label>
+          <textarea id="privilegedUsers" class="field-textarea" rows="3"
+            placeholder="svc_backup&#10;svc_monitoring&#10;admin_ti"></textarea>
+        </div>
+      </div>
+
+      <div class="card settings-card">
+        <div class="card-label">Contexto Livre</div>
+        <p class="field-hint">Qualquer informação adicional relevante para a IA. Ex: "ambiente de testes na faixa 10.99.x.x", "usuários do grupo DevOps fazem sudo regularmente".</p>
+        <div class="field-group">
+          <textarea id="customContext" class="field-textarea" rows="4"
+            placeholder="Descreva particularidades do ambiente que ajudem a reduzir falsos positivos..."></textarea>
+        </div>
+      </div>
+
+      <div class="settings-footer">
+        <span id="saveStatus" class="save-status hidden">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+          Configurações salvas
+        </span>
+        <button type="submit" class="btn-submit-diagnosis" id="saveBtn">
+          Salvar configurações
+        </button>
+      </div>
+
+    </form>
+  </main>
+
+  <footer class="footer">
+    Vestigo · privacidade by design · o log bruto nunca chega à IA
+  </footer>
+
+  <script>
+    function parseLines(str) {
+      return str.split('\n').map(s => s.trim()).filter(Boolean);
+    }
+
+    async function loadConfig() {
+      try {
+        const resp = await fetch('/api/org-config');
+        const cfg = await resp.json();
+        document.getElementById('orgName').value = cfg.org_name || '';
+        document.getElementById('internalCidrs').value = (cfg.internal_cidrs || []).join('\n');
+        document.getElementById('trustedIps').value = (cfg.trusted_ips || []).join('\n');
+        document.getElementById('authorizedTools').value = (cfg.authorized_tools || []).join('\n');
+        document.getElementById('privilegedUsers').value = (cfg.privileged_users || []).join('\n');
+        document.getElementById('customContext').value = cfg.custom_context || '';
+      } catch (e) {
+        console.warn('Erro ao carregar configurações', e);
+      }
+    }
+
+    async function saveConfig(e) {
+      e.preventDefault();
+      const btn = document.getElementById('saveBtn');
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+
+      const config = {
+        org_name: document.getElementById('orgName').value.trim(),
+        internal_cidrs: parseLines(document.getElementById('internalCidrs').value),
+        trusted_ips: parseLines(document.getElementById('trustedIps').value),
+        authorized_tools: parseLines(document.getElementById('authorizedTools').value),
+        privileged_users: parseLines(document.getElementById('privilegedUsers').value),
+        custom_context: document.getElementById('customContext').value.trim(),
+      };
+
+      try {
+        const resp = await fetch('/api/org-config', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(config),
+        });
+        if (!resp.ok) throw new Error();
+        document.getElementById('saveStatus').classList.remove('hidden');
+        setTimeout(() => document.getElementById('saveStatus').classList.add('hidden'), 3000);
+      } catch {
+        alert('Erro ao salvar. Tente novamente.');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Salvar configurações';
+      }
+    }
+
+    loadConfig();
+  </script>
+</body>
+</html>

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vestigo — SOC Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/>
+          <path d="m21 21-4.35-4.35"/>
+          <path d="M11 8v6M8 11h6" stroke-width="1.5"/>
+        </svg>
+        VESTIGO
+      </div>
+      <nav class="header-nav">
+        <a href="/" class="nav-link active">Analisar</a>
+        <a href="/history.html" class="nav-link">Histórico</a>
+        <a href="/dashboard.html" class="nav-link">Dashboard</a>
+        <a href="/settings.html" class="nav-link">Configurações</a>
+      </nav>
+      <span class="tagline">SOC Intelligence Platform</span>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <!-- ── Mode Toggle ──────────────────────────────────────────────────── -->
+    <div class="mode-toggle">
+      <button id="modeTabIndividual" class="mode-tab active" onclick="switchMode('individual')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/>
+          <line x1="3" y1="15" x2="21" y2="15"/>
+        </svg>
+        Análise Individual
+      </button>
+      <button id="modeTabCorrelate" class="mode-tab" onclick="switchMode('correlate')">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+        Correlação de Logs
+      </button>
+    </div>
+
+    <!-- ── Input: Análise Individual ─────────────────────────────────────── -->
+    <section id="sectionIndividual" class="input-section">
+
+      <div class="input-header">
+        <div class="input-title">Log de Segurança</div>
+        <div class="input-hint">Ctrl+Enter para analisar</div>
+      </div>
+
+      <div id="dropZone" class="drop-zone">
+        <textarea
+          id="logInput"
+          class="log-textarea"
+          placeholder="Cole o log bruto aqui — Windows Event XML, Syslog, JSON, CEF, texto livre...&#10;Ou arraste um arquivo .log / .xml / .json / .txt."
+          spellcheck="false"
+        ></textarea>
+        <div id="dropOverlay" class="drop-overlay hidden">
+          <div class="drop-message">Solte o arquivo aqui</div>
+        </div>
+      </div>
+
+      <div class="upload-row">
+        <label class="btn-upload" for="fileInput">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          Carregar arquivo
+        </label>
+        <input id="fileInput" type="file" accept=".log,.txt,.xml,.json,.csv" class="hidden" onchange="loadFile(event)" />
+        <span id="fileName" class="file-name"></span>
+      </div>
+
+      <div class="controls">
+        <div class="profile-select">
+          <label for="profileSelect">Perfil do analista</label>
+          <select id="profileSelect">
+            <option value="n1">N1 — Analista Júnior (ações imediatas)</option>
+            <option value="n2n3">N2/N3 — Analista Técnico (análise profunda)</option>
+          </select>
+        </div>
+        <button id="analyzeBtn" class="btn-analyze" onclick="analyze()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          <span id="btnText">Analisar</span>
+          <span id="btnSpinner" class="spinner hidden"></span>
+        </button>
+      </div>
+
+      <div id="progressBar" class="progress-bar hidden">
+        <div class="progress-stages">
+          <span id="stageParser"   class="stage">01 · Parser</span>
+          <span id="stageEnricher" class="stage">02 · Enricher</span>
+          <span id="stageAI"       class="stage">03 · Análise IA</span>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ── Input: Correlação de Logs ──────────────────────────────────────── -->
+    <section id="sectionCorrelate" class="input-section hidden">
+
+      <div class="input-header">
+        <div class="input-title">Correlação de Logs</div>
+        <div class="input-hint">2 a 10 logs — a IA identifica padrões de ataque</div>
+      </div>
+
+      <p class="corr-desc">Cole múltiplos logs de eventos suspeitos. A IA analisa cada um, cruza IoCs compartilhados e identifica se formam um ataque coordenado.</p>
+
+      <div id="corrLogList" class="corr-log-list">
+        <!-- entries injected by JS -->
+      </div>
+
+      <button class="btn-add-log" onclick="addCorrLog()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Adicionar log
+      </button>
+
+      <div class="controls" style="margin-top:16px">
+        <div class="profile-select">
+          <label for="corrProfileSelect">Perfil</label>
+          <select id="corrProfileSelect">
+            <option value="n2n3" selected>N2/N3 — Análise Técnica (recomendado)</option>
+            <option value="n1">N1 — Analista Júnior</option>
+          </select>
+        </div>
+        <button id="corrBtn" class="btn-analyze" onclick="correlate()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          <span id="corrBtnText">Correlacionar</span>
+          <span id="corrSpinner" class="spinner hidden"></span>
+        </button>
+      </div>
+
+    </section>
+
+    <!-- ── Error ──────────────────────────────────────────────────────────── -->
+    <div id="errorBanner" class="error-banner hidden">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span id="errorMsg"></span>
+    </div>
+
+    <!-- ── Results ────────────────────────────────────────────────────────── -->
+    <section id="results" class="results hidden">
+
+      <!-- Severity banner -->
+      <div id="severityBanner" class="severity-banner">
+        <div class="sev-label">
+          <span class="sev-dot"></span>
+          <div>
+            <div id="severityText" class="sev-text"></div>
+            <div class="sev-sub">Ameaça detectada e analisada</div>
+          </div>
+        </div>
+        <div class="results-actions">
+          <button class="btn-export" onclick="exportJSON()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            JSON
+          </button>
+          <button class="btn-export" onclick="exportPDF()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            PDF
+          </button>
+        </div>
+      </div>
+
+      <!-- Resumo + MITRE -->
+      <div class="results-grid">
+        <div class="card result-card">
+          <div class="card-label">Resumo do Evento</div>
+          <div id="resumoText" class="result-text"></div>
+        </div>
+        <div class="card result-card">
+          <div class="card-label">MITRE ATT&amp;CK</div>
+          <div id="mitreText" class="result-text mitre-block"></div>
+        </div>
+      </div>
+
+      <!-- Ações -->
+      <div class="card result-card">
+        <div class="card-label">Ações Recomendadas</div>
+        <ol id="acoesList" class="actions-list"></ol>
+      </div>
+
+      <!-- IoCs -->
+      <div class="card result-card">
+        <div class="card-label">Indicadores de Comprometimento</div>
+        <div id="iocsContent" class="iocs-grid"></div>
+      </div>
+
+      <!-- Queries -->
+      <div class="card result-card">
+        <div class="card-label">Queries de Threat Hunting</div>
+        <div class="queries-tabs">
+          <button class="tab-btn active" onclick="switchTab('kql')">KQL · Sentinel / Defender</button>
+          <button class="tab-btn" onclick="switchTab('spl')">SPL · Splunk</button>
+        </div>
+        <div id="queryKQL" class="query-block">
+          <pre id="kqlQuery" class="query-code"></pre>
+          <button class="btn-copy" onclick="copyQuery('kqlQuery')">Copiar</button>
+        </div>
+        <div id="querySPL" class="query-block hidden">
+          <pre id="splQuery" class="query-code"></pre>
+          <button class="btn-copy" onclick="copyQuery('splQuery')">Copiar</button>
+        </div>
+      </div>
+
+      <!-- N2/N3 extra -->
+      <div id="cardN2Extra" class="card result-card hidden">
+        <div class="card-label">Análise Técnica Avançada · N2/N3</div>
+        <div id="n2ExtraContent"></div>
+      </div>
+
+      <!-- Contexto histórico (similar analyses) -->
+      <div id="cardContext" class="card result-card hidden">
+        <div class="card-label">Contexto Histórico · Eventos Similares</div>
+        <div id="contextSummary" class="context-summary"></div>
+        <div id="contextList" class="context-list"></div>
+      </div>
+
+      <!-- Diagnóstico do analista -->
+      <div id="cardDiagnosis" class="card diagnosis-card hidden">
+        <div class="card-label">Diagnóstico do Analista</div>
+        <p class="diagnosis-hint">Registre sua avaliação. Isso alimenta o contexto histórico de análises futuras.</p>
+
+        <div class="verdict-btns" id="verdictBtns">
+          <button class="verdict-btn vp" onclick="selectVerdict('verdadeiro_positivo')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            Verdadeiro Positivo
+          </button>
+          <button class="verdict-btn fp" onclick="selectVerdict('falso_positivo')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="15" y1="9" x2="9" y2="15"/>
+              <line x1="9" y1="9" x2="15" y2="15"/>
+            </svg>
+            Falso Positivo
+          </button>
+          <button class="verdict-btn inc" onclick="selectVerdict('inconclusivo')">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+            Inconclusivo
+          </button>
+        </div>
+
+        <textarea
+          id="diagnosisNote"
+          class="diagnosis-textarea"
+          placeholder="Nota do analista (opcional) — descreva o contexto, o que levou ao falso positivo, qual ação foi tomada..."
+          rows="3"
+        ></textarea>
+
+        <div class="diagnosis-footer">
+          <span id="diagnosisSaved" class="diagnosis-saved hidden">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            Diagnóstico salvo
+          </span>
+          <button id="diagnosisSubmit" class="btn-submit-diagnosis" onclick="submitDiagnosis()" disabled>
+            Salvar diagnóstico
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ── Correlation Results ──────────────────────────────────────────── -->
+    <section id="resultsCorrelate" class="results hidden">
+
+      <div id="corrSeverityBanner" class="severity-banner">
+        <div class="sev-label">
+          <span class="sev-dot"></span>
+          <div>
+            <div id="corrSeverityText" class="sev-text"></div>
+            <div class="sev-sub" id="corrCoordText">Correlação de múltiplos eventos</div>
+          </div>
+        </div>
+        <div class="results-actions">
+          <button class="btn-export" onclick="exportCorrJSON()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            JSON
+          </button>
+        </div>
+      </div>
+
+      <!-- Resumo + MITRE -->
+      <div class="results-grid">
+        <div class="card result-card">
+          <div class="card-label">Resumo da Correlação</div>
+          <div id="corrResumo" class="result-text"></div>
+        </div>
+        <div class="card result-card">
+          <div class="card-label">MITRE ATT&amp;CK</div>
+          <div id="corrMitre" class="result-text mitre-block"></div>
+        </div>
+      </div>
+
+      <!-- Linha do tempo -->
+      <div class="card result-card">
+        <div class="card-label">Linha do Tempo do Ataque</div>
+        <div id="corrTimeline" class="corr-timeline"></div>
+      </div>
+
+      <!-- Correlações encontradas -->
+      <div class="card result-card">
+        <div class="card-label">Correlações Identificadas</div>
+        <div id="corrLinks" class="corr-links"></div>
+      </div>
+
+      <!-- IoCs combinados -->
+      <div class="card result-card">
+        <div class="card-label">IoCs Combinados</div>
+        <div id="corrIoCs" class="iocs-grid"></div>
+      </div>
+
+      <!-- Recomendações -->
+      <div class="card result-card">
+        <div class="card-label">Recomendações</div>
+        <ol id="corrRecomendacoes" class="actions-list"></ol>
+      </div>
+
+      <!-- Queries -->
+      <div class="card result-card">
+        <div class="card-label">Queries de Detecção Correlacionada</div>
+        <div class="queries-tabs">
+          <button class="tab-btn active" onclick="switchCorrTab('kql')">KQL · Sentinel / Defender</button>
+          <button class="tab-btn" onclick="switchCorrTab('spl')">SPL · Splunk</button>
+        </div>
+        <div id="corrQueryKQL" class="query-block">
+          <pre id="corrKql" class="query-code"></pre>
+          <button class="btn-copy" onclick="copyQuery('corrKql')">Copiar</button>
+        </div>
+        <div id="corrQuerySPL" class="query-block hidden">
+          <pre id="corrSpl" class="query-code"></pre>
+          <button class="btn-copy" onclick="copyQuery('corrSpl')">Copiar</button>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    Vestigo · privacidade by design · o log bruto nunca chega à IA
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vestigo — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          <path d="M11 8v6M8 11h6" stroke-width="1.5"/>
+        </svg>
+        <span>VESTIGO</span>
+      </div>
+      <nav class="header-nav">
+        <a href="/" class="nav-link">Analisar</a>
+        <a href="/history.html" class="nav-link">Histórico</a>
+        <a href="/dashboard.html" class="nav-link active">Dashboard</a>
+        <a href="/settings.html" class="nav-link">Configurações</a>
+      </nav>
+      <span class="tagline">SOC Intelligence Platform</span>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="page-title">Dashboard de Métricas</div>
+
+    <div id="noData" class="hidden card" style="text-align:center;padding:40px;color:var(--text-muted);margin-bottom:24px">
+      Nenhuma análise registrada ainda. <a href="/" style="color:var(--accent)">Analise um log</a> para começar.
+    </div>
+
+    <div id="statsContent">
+      <div class="stat-grid" id="statGrid">
+        <div class="stat-card">
+          <div class="stat-value" id="statTotal">—</div>
+          <div class="stat-label">Total de Análises</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statCritical" style="color:var(--red)">—</div>
+          <div class="stat-label">Críticas</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statHigh" style="color:var(--orange)">—</div>
+          <div class="stat-label">Altas</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="statN1" style="color:var(--text-muted)">—</div>
+          <div class="stat-label">Perfil N1</div>
+        </div>
+      </div>
+
+      <div class="charts-grid">
+        <div class="chart-card">
+          <div class="chart-title">Distribuição por Severidade</div>
+          <canvas id="chartSeverity" height="200"></canvas>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Análises por Dia (30 dias)</div>
+          <canvas id="chartDaily" height="200"></canvas>
+        </div>
+      </div>
+
+      <div class="card" id="mitreCard">
+        <div class="card-label">Top Técnicas MITRE ATT&CK</div>
+        <div id="mitreList" style="margin-top:8px"></div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <span>Vestigo MVP — privacidade by design · log bruto nunca chega à IA</span>
+  </footer>
+
+  <script>
+    const SEV_COLORS_MAP = {
+      critical: '#f85149',
+      high:     '#f0883e',
+      medium:   '#d29922',
+      low:      '#3fb950',
+    };
+
+    Chart.defaults.color = '#7d8590';
+    Chart.defaults.borderColor = '#30363d';
+    Chart.defaults.font.family = "'Segoe UI', sans-serif";
+
+    async function loadStats() {
+      try {
+        const resp = await fetch('/api/stats');
+        const data = await resp.json();
+
+        if (!data.total) {
+          document.getElementById('noData').classList.remove('hidden');
+          document.getElementById('statsContent').classList.add('hidden');
+          return;
+        }
+
+        document.getElementById('statTotal').textContent = data.total;
+
+        const sevMap = Object.fromEntries((data.by_severity || []).map(r => [r.severidade, r.count]));
+        document.getElementById('statCritical').textContent = sevMap['critical'] ?? 0;
+        document.getElementById('statHigh').textContent = sevMap['high'] ?? 0;
+
+        const perfilMap = Object.fromEntries((data.by_perfil || []).map(r => [r.perfil, r.count]));
+        document.getElementById('statN1').textContent = perfilMap['n1'] ?? 0;
+
+        renderSeverityChart(data.by_severity || []);
+        renderDailyChart(data.by_day || []);
+        renderMitreList(data.top_mitre || []);
+      } catch (e) {
+        document.getElementById('statsContent').innerHTML =
+          '<p style="color:var(--red);text-align:center">Erro ao carregar métricas.</p>';
+      }
+    }
+
+    function renderSeverityChart(bySev) {
+      const labels = bySev.map(r => (r.severidade || 'desconhecido').toUpperCase());
+      const values = bySev.map(r => r.count);
+      const colors = bySev.map(r => SEV_COLORS_MAP[r.severidade?.toLowerCase()] || '#58a6ff');
+
+      new Chart(document.getElementById('chartSeverity'), {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{ data: values, backgroundColor: colors, borderWidth: 2, borderColor: '#161b22' }],
+        },
+        options: {
+          plugins: { legend: { position: 'bottom' } },
+          cutout: '65%',
+        },
+      });
+    }
+
+    function renderDailyChart(byDay) {
+      const labels = byDay.map(r => {
+        const d = new Date(r.day + 'T00:00:00');
+        return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      });
+      const values = byDay.map(r => r.count);
+
+      new Chart(document.getElementById('chartDaily'), {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            data: values,
+            backgroundColor: '#1f6feb55',
+            borderColor: '#58a6ff',
+            borderWidth: 1,
+            borderRadius: 4,
+          }],
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: '#21262d' } },
+            y: { grid: { color: '#21262d' }, beginAtZero: true, ticks: { precision: 0 } },
+          },
+        },
+      });
+    }
+
+    function renderMitreList(topMitre) {
+      const card = document.getElementById('mitreCard');
+      if (!topMitre.length) { card.style.display = 'none'; return; }
+
+      const maxCount = topMitre[0].count;
+      document.getElementById('mitreList').innerHTML = topMitre.map(r => `
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+          <span style="font-family:var(--font-mono);font-size:12px;color:var(--accent);width:80px;flex-shrink:0">${r.mitre_id || '—'}</span>
+          <div style="flex:1">
+            <div style="font-size:12px;color:var(--text);margin-bottom:4px">${r.mitre_tecnica || ''}</div>
+            <div style="height:6px;background:#21262d;border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${Math.round((r.count/maxCount)*100)}%;background:var(--accent);border-radius:3px"></div>
+            </div>
+          </div>
+          <span style="font-size:12px;color:var(--text-muted);width:24px;text-align:right">${r.count}</span>
+        </div>
+      `).join('');
+    }
+
+    loadStats();
+  </script>
+</body>
+</html>

@@ -1,0 +1,104 @@
+version: "3.9"
+
+services:
+  gateway:
+    build: ./gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - PARSER_URL=http://parser-service:8001
+      - ENRICHER_URL=http://enricher-service:8002
+      - AI_URL=http://ai-service:8003
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET}
+      - RATE_LIMIT_PER_MINUTE=${RATE_LIMIT_PER_MINUTE:-10}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-vestigo}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-vestigo}
+      - WEBHOOK_URL=${WEBHOOK_URL:-}
+      - WEBHOOK_MIN_SEVERITY=${WEBHOOK_MIN_SEVERITY:-high}
+    depends_on:
+      parser-service:
+        condition: service_healthy
+      enricher-service:
+        condition: service_healthy
+      ai-service:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - vestigo-net
+    restart: unless-stopped
+
+  parser-service:
+    build: ./parser-service
+    expose:
+      - "8001"
+    environment:
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET}
+    networks:
+      - vestigo-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  enricher-service:
+    build: ./enricher-service
+    expose:
+      - "8002"
+    environment:
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET}
+      - ABUSEIPDB_API_KEY=${ABUSEIPDB_API_KEY}
+      - VIRUSTOTAL_API_KEY=${VIRUSTOTAL_API_KEY}
+    networks:
+      - vestigo-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  ai-service:
+    build: ./ai-service
+    expose:
+      - "8003"
+    environment:
+      - INTERNAL_API_SECRET=${INTERNAL_API_SECRET}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - LLM_PROVIDER=${LLM_PROVIDER:-groq}
+    networks:
+      - vestigo-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-vestigo}
+      - POSTGRES_USER=${POSTGRES_USER:-vestigo}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - vestigo-net
+    expose:
+      - "5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-vestigo}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  vestigo-net:
+    driver: bridge
+
+volumes:
+  postgres_data:

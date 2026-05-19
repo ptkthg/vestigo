@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vestigo — Histórico</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          <path d="M11 8v6M8 11h6" stroke-width="1.5"/>
+        </svg>
+        VESTIGO
+      </div>
+      <nav class="header-nav">
+        <a href="/" class="nav-link">Analisar</a>
+        <a href="/history.html" class="nav-link active">Histórico</a>
+        <a href="/dashboard.html" class="nav-link">Dashboard</a>
+        <a href="/settings.html" class="nav-link">Configurações</a>
+      </nav>
+      <span class="tagline">SOC Intelligence Platform</span>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="page-title">Histórico de Análises</div>
+
+    <!-- Barra de busca e filtros -->
+    <div class="card search-bar-card">
+      <div class="search-row">
+        <div class="search-input-wrap">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input
+            id="searchInput"
+            type="text"
+            class="search-input"
+            placeholder="Buscar por IP, hash, domínio, MITRE, evento..."
+            oninput="debounceSearch()"
+          />
+          <button class="search-clear hidden" id="searchClear" onclick="clearSearch()">✕</button>
+        </div>
+        <div class="filter-row">
+          <select id="filterSeverity" class="filter-select" onchange="applyFilters()">
+            <option value="">Severidade</option>
+            <option value="critical">Critical</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+          <select id="filterDiagnosis" class="filter-select" onchange="applyFilters()">
+            <option value="">Diagnóstico</option>
+            <option value="verdadeiro_positivo">Verdadeiro Positivo</option>
+            <option value="falso_positivo">Falso Positivo</option>
+            <option value="inconclusivo">Inconclusivo</option>
+            <option value="none">Sem diagnóstico</option>
+          </select>
+          <span id="resultCount" class="result-count"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <div id="loadingMsg" style="color:var(--text-2);text-align:center;padding:32px;font-size:13px">Carregando...</div>
+      <div id="emptyMsg" class="hidden" style="color:var(--text-3);text-align:center;padding:40px;font-size:13px">
+        Nenhuma análise encontrada.
+      </div>
+      <div id="tableWrap" class="hidden">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Data/Hora</th>
+              <th>Perfil</th>
+              <th>Severidade</th>
+              <th>MITRE</th>
+              <th>Evento</th>
+              <th>IoCs</th>
+              <th>Diagnóstico</th>
+            </tr>
+          </thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="pagination" class="pagination-row hidden">
+      <button class="btn-export" id="btnPrev" onclick="changePage(-1)">← Anterior</button>
+      <span id="pageInfo" style="font-size:13px;color:var(--text-3)"></span>
+      <button class="btn-export" id="btnNext" onclick="changePage(1)">Próxima →</button>
+    </div>
+  </main>
+
+  <footer class="footer">
+    Vestigo · privacidade by design · o log bruto nunca chega à IA
+  </footer>
+
+  <script>
+    const LIMIT = 20;
+    let offset = 0;
+    let searchTimer = null;
+
+    const DIAG_LABEL = {
+      verdadeiro_positivo: { text: 'VP', color: 'var(--red)' },
+      falso_positivo:      { text: 'FP', color: 'var(--green)' },
+      inconclusivo:        { text: '?',  color: 'var(--yellow)' },
+    };
+
+    function escHtml(str) {
+      if (!str) return '—';
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function formatDate(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+    }
+
+    function getFilters() {
+      return {
+        q: document.getElementById('searchInput').value.trim(),
+        severity: document.getElementById('filterSeverity').value,
+        diagnosis: document.getElementById('filterDiagnosis').value,
+      };
+    }
+
+    function debounceSearch() {
+      clearTimeout(searchTimer);
+      const q = document.getElementById('searchInput').value;
+      document.getElementById('searchClear').classList.toggle('hidden', !q);
+      searchTimer = setTimeout(() => { offset = 0; loadHistory(); }, 350);
+    }
+
+    function applyFilters() { offset = 0; loadHistory(); }
+
+    function clearSearch() {
+      document.getElementById('searchInput').value = '';
+      document.getElementById('searchClear').classList.add('hidden');
+      offset = 0;
+      loadHistory();
+    }
+
+    async function loadHistory() {
+      const f = getFilters();
+      const params = new URLSearchParams({ limit: LIMIT, offset, ...f });
+      document.getElementById('loadingMsg').classList.remove('hidden');
+      document.getElementById('tableWrap').classList.add('hidden');
+      document.getElementById('emptyMsg').classList.add('hidden');
+      document.getElementById('resultCount').textContent = '';
+
+      try {
+        const resp = await fetch(`/api/history?${params}`);
+        const data = await resp.json();
+        const items = data.items || [];
+        const total = data.total ?? items.length;
+
+        document.getElementById('loadingMsg').classList.add('hidden');
+        document.getElementById('resultCount').textContent = total ? `${total} resultado${total !== 1 ? 's' : ''}` : '';
+
+        if (!items.length) {
+          document.getElementById('emptyMsg').classList.remove('hidden');
+          document.getElementById('pagination').classList.add('hidden');
+          return;
+        }
+
+        const sevClass = { low:'sev-low', medium:'sev-medium', high:'sev-high', critical:'sev-critical' };
+        document.getElementById('historyBody').innerHTML = items.map(r => {
+          const sc = sevClass[r.severidade?.toLowerCase()] || '';
+          const diag = DIAG_LABEL[r.diagnosis];
+          const diagCell = diag
+            ? `<span style="font-family:var(--mono);font-weight:700;color:${diag.color}">${diag.text}</span>
+               ${r.diagnosis_note ? `<span class="diag-note-tip" title="${escHtml(r.diagnosis_note)}">·</span>` : ''}`
+            : '<span style="color:var(--text-3);font-size:11px">—</span>';
+
+          return `<tr>
+            <td class="font-mono" style="white-space:nowrap">${formatDate(r.created_at)}</td>
+            <td><span style="font-family:var(--mono);font-size:11px;color:var(--text-3)">${(r.perfil||'').toUpperCase()}</span></td>
+            <td><span class="severity-badge ${sc}">${(r.severidade||'—').toUpperCase()}</span></td>
+            <td class="font-mono" style="color:var(--blue)">${escHtml(r.mitre_id)||'—'}</td>
+            <td class="evento-cell" title="${escHtml(r.evento)}">${escHtml(r.evento)||'—'}</td>
+            <td style="color:var(--text-3);text-align:center">${r.iocs_count??0}</td>
+            <td>${diagCell}</td>
+          </tr>`;
+        }).join('');
+
+        document.getElementById('tableWrap').classList.remove('hidden');
+        updatePagination(total, items.length);
+      } catch (e) {
+        document.getElementById('loadingMsg').textContent = 'Erro ao carregar histórico.';
+      }
+    }
+
+    function updatePagination(total, count) {
+      const pg = document.getElementById('pagination');
+      if (total <= LIMIT) { pg.classList.add('hidden'); return; }
+      pg.classList.remove('hidden');
+      const page = Math.floor(offset / LIMIT) + 1;
+      const pages = Math.ceil(total / LIMIT);
+      document.getElementById('btnPrev').disabled = offset === 0;
+      document.getElementById('btnNext').disabled = offset + count >= total;
+      document.getElementById('pageInfo').textContent = `${page} / ${pages}`;
+    }
+
+    function changePage(dir) {
+      offset = Math.max(0, offset + dir * LIMIT);
+      loadHistory();
+    }
+
+    // Checar parâmetro de busca na URL (ex: vindo de outra página)
+    const urlQ = new URLSearchParams(location.search).get('q');
+    if (urlQ) {
+      document.getElementById('searchInput').value = urlQ;
+      document.getElementById('searchClear').classList.remove('hidden');
+    }
+
+    loadHistory();
+  </script>
+</body>
+</html>
