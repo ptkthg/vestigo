@@ -68,6 +68,8 @@ services:
       - GROQ_API_KEY=${GROQ_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - LLM_PROVIDER=${LLM_PROVIDER:-groq}
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
     networks:
       - vestigo-net
     restart: unless-stopped
@@ -76,6 +78,32 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    expose:
+      - "11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama3.1:8b}
+    entrypoint: >
+      /bin/sh -c "ollama serve &
+      sleep 5 &&
+      echo 'Baixando modelo ${OLLAMA_MODEL:-llama3.1:8b}...' &&
+      ollama pull ${OLLAMA_MODEL:-llama3.1:8b} &&
+      echo 'Modelo pronto.' &&
+      wait"
+    networks:
+      - vestigo-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 300s
 
   postgres:
     image: postgres:16-alpine
@@ -102,3 +130,4 @@ networks:
 
 volumes:
   postgres_data:
+  ollama_data:
