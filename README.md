@@ -1,4 +1,4 @@
-<![CDATA[<div align="center">
+<div align="center">
 
 <br/>
 
@@ -21,7 +21,7 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white)
-![LLM](https://img.shields.io/badge/LLM-Groq%20%2F%20OpenAI-FF6B35?style=flat-square)
+![LLM](https://img.shields.io/badge/LLM-Groq%20%7C%20OpenAI%20%7C%20Ollama-FF6B35?style=flat-square)
 ![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)
 
 </div>
@@ -30,16 +30,16 @@
 
 ## O que é o Vestigo?
 
-O Vestigo é uma plataforma de análise de logs de segurança para times de SOC. Você cola um log bruto — Windows Event XML, Syslog, JSON, CEF — e a plataforma entrega em segundos:
+Plataforma de análise de logs de segurança para times de SOC. Cole um log bruto — Windows Event XML, Syslog, JSON, CEF — e receba em segundos:
 
 - **O que aconteceu** em linguagem clara
-- **Qual a severidade real** (low / medium / high / critical)
+- **Qual a severidade real** — low / medium / high / critical
 - **O que fazer agora** — ações imediatas por perfil de analista
 - **Mapeamento MITRE ATT&CK** com técnica e tática
 - **Queries prontas** para KQL (Sentinel/Defender) e SPL (Splunk)
 - **IoCs extraídos** — IPs, hashes, domínios, URLs
 
-> **Diferencial:** privacidade by design — o log bruto **nunca** chega à IA. Apenas um JSON de contexto estruturado e mascarado é enviado ao modelo.
+> **Privacidade by design** — o log bruto **nunca** chega à IA. Apenas um JSON de contexto estruturado e mascarado é enviado ao modelo. Com Ollama, nenhum dado sai da rede.
 
 ---
 
@@ -49,83 +49,78 @@ O Vestigo é uma plataforma de análise de logs de segurança para times de SOC.
 
 | Recurso | Descrição |
 |---|---|
-| 🔍 **Análise individual** | Streaming SSE com indicador de progresso por etapa |
-| 🔗 **Correlação de logs** | Analisa 2–10 logs juntos e detecta ataques coordenados |
-| 📊 **Perfil N1** | Linguagem simples, ações imediatas, indicação de escalonamento |
-| 🎯 **Perfil N2/N3** | Análise forense, cadeia de ataque, pivôs de investigação, containment |
-| 📦 **Batch** | Análise em lote de até 20 logs via API |
+| **Análise individual** | Streaming SSE com indicador de progresso por etapa |
+| **Correlação de logs** | Analisa 2–10 logs juntos e detecta ataques coordenados |
+| **Perfil N1** | Linguagem simples, ações imediatas, indicação de escalonamento |
+| **Perfil N2/N3** | Análise forense, cadeia de ataque, pivôs de investigação, containment |
+| **Batch** | Análise em lote de até 20 logs via API |
 
 ### Enriquecimento
 
 | Recurso | Descrição |
 |---|---|
-| 🌐 **AbuseIPDB** | Reputação de IPs com cache TTL para não esgotar cota |
-| 🦠 **VirusTotal** | Reputação de hashes e domínios |
-| 🛡️ **MITRE ATT&CK** | Mapeamento automático de técnica e tática |
-| ⚖️ **Score de severidade** | Cálculo próprio com contexto organizacional |
+| **AbuseIPDB** | Reputação de IPs com cache TTL para não esgotar a cota |
+| **VirusTotal** | Reputação de hashes e domínios |
+| **MITRE ATT&CK** | Mapeamento automático de técnica e tática |
+| **Score de severidade** | Cálculo próprio calibrado pelo contexto organizacional |
 
 ### Operacional
 
 | Recurso | Descrição |
 |---|---|
-| 📝 **Diagnóstico do analista** | Registre FP / VP / Inconclusivo com nota — alimenta o contexto histórico |
-| 🏢 **Contexto organizacional** | Configure CIDRs internos, IPs confiáveis e ferramentas autorizadas para reduzir falsos positivos |
-| 🔔 **Webhooks** | Alertas automáticos para Slack e Teams por severidade mínima configurável |
-| 📈 **Dashboard** | Métricas de volume, distribuição de severidade e top técnicas MITRE |
-| 🔎 **Histórico com busca** | Filtre por IoC, MITRE, severidade e diagnóstico |
-| 💾 **Exportação** | JSON e PDF de qualquer análise |
+| **Diagnóstico do analista** | Registre FP / VP / Inconclusivo com nota — alimenta o histórico |
+| **Contexto organizacional** | Configure CIDRs internos, IPs confiáveis e ferramentas autorizadas |
+| **Webhooks** | Alertas automáticos para Slack e Teams por severidade mínima |
+| **Dashboard** | Métricas de volume, distribuição de severidade e top técnicas MITRE |
+| **Histórico com busca** | Filtre por IoC, MITRE, severidade e diagnóstico |
+| **Exportação** | JSON e PDF de qualquer análise |
 
 ---
 
 ## Arquitetura
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                         Browser                             │
-│              http://localhost:8000                           │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-              ┌────────▼────────┐
-              │    Gateway      │  FastAPI · Rate limiting · SSE
-              │    :8000        │  PostgreSQL · Webhooks
-              └──┬──────┬──┬───┘
-                 │      │  │
-        ┌────────▼──┐   │  └────────────────┐
-        │  Parser   │   │                   │
-        │  :8001    │   │            ┌──────▼──────┐
-        │           │   │            │  AI Service  │
-        │ • Detecta │   │            │  :8003       │
-        │   formato │   │            │              │
-        │ • Mascara │   │            │ • Groq LLaMA │
-        │   PII     │   │            │   3.3 70B    │
-        │ • Extrai  │   │            │ • OpenAI     │
-        │   IoCs    │   │            │   GPT-4o     │
-        └────────┬──┘   │            └─────────────┘
-                 │      │
-          ┌──────▼──────▼─┐
-          │   Enricher    │
-          │   :8002       │
-          │               │
-          │ • AbuseIPDB   │
-          │ • VirusTotal  │
-          │ • MITRE map   │
-          │ • Severidade  │
-          └───────────────┘
+┌──────────────────────────────────────────────────────┐
+│                      Browser                         │
+│                 http://localhost:8000                 │
+└─────────────────────┬────────────────────────────────┘
+                      │
+             ┌────────▼────────┐
+             │    Gateway      │  FastAPI · SSE · Rate limit
+             │    :8000        │  PostgreSQL · Webhooks
+             └──┬───────┬──┬───┘
+                │       │  │
+       ┌────────▼─┐     │  └──────────────────┐
+       │  Parser  │     │                     │
+       │  :8001   │     │              ┌───────▼──────┐
+       │          │     │              │  AI Service  │
+       │ • Formato│     │              │  :8003       │
+       │ • PII    │     │              │              │
+       │ • IoCs   │     │              │ • Groq       │
+       └────────┬─┘     │              │ • OpenAI     │
+                │       │              │ • Ollama     │
+         ┌──────▼───────▼─┐            │  (local)     │
+         │   Enricher     │            └──────────────┘
+         │   :8002        │
+         │                │
+         │ • AbuseIPDB    │
+         │ • VirusTotal   │
+         │ • MITRE ATT&CK │
+         │ • Severidade   │
+         └────────────────┘
 ```
 
 ### Fluxo de privacidade
 
 ```
-Log bruto → [Parser] ──────────────────────────────────────────┐
-                                                                │
-             Mascaramento PII                                   │
-             ├── IPs internos    →  [IP_INTERNO]               │
-             ├── Emails          →  [EMAIL]                    │
-             ├── Tokens/senhas   →  [CREDENTIAL]               │
-             └── CPF / dados PII →  [PII]                      │
-                                                                │
-             JSON estruturado → [Enricher] → [AI Service] ─────┘
-             (log bruto NUNCA enviado à IA)
+Log bruto → [Parser] → Mascaramento PII → JSON limpo
+                         ├── IPs internos  →  [IP_INTERNO]
+                         ├── Emails        →  [EMAIL]
+                         ├── Tokens/senhas →  [CREDENTIAL]
+                         └── CPF / PII     →  [PII]
+                                ↓
+              [Enricher] → [AI Service] → LLM
+              (log bruto NUNCA enviado à IA)
 ```
 
 ---
@@ -146,8 +141,8 @@ Log bruto → [Parser] ───────────────────
 
 ### Pré-requisitos
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (ou Docker + Compose)
-- Chave de API: [Groq](https://console.groq.com) *(gratuito, recomendado)* ou [OpenAI](https://platform.openai.com)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
+- Chave de API: [Groq](https://console.groq.com) *(gratuito, recomendado)* ou [OpenAI](https://platform.openai.com) — ou nenhuma, se usar Ollama
 - Opcional: [AbuseIPDB](https://www.abuseipdb.com/api) e [VirusTotal](https://developers.virustotal.com)
 
 ### 1. Configurar variáveis de ambiente
@@ -156,25 +151,18 @@ Log bruto → [Parser] ───────────────────
 cp .env.example .env
 ```
 
-Edite `.env`:
+Edite `.env` com as chaves desejadas:
 
 ```env
-# Segurança interna
-INTERNAL_API_SECRET=<gere com: python -c "import secrets; print(secrets.token_hex(32))">
-POSTGRES_PASSWORD=<senha forte>
+INTERNAL_API_SECRET=   # gere com: python -c "import secrets; print(secrets.token_hex(32))"
+POSTGRES_PASSWORD=     # senha forte
 
-# LLM — escolha pelo menos um
-GROQ_API_KEY=gsk_...          # LLaMA 3.3 70B, plano gratuito disponível
-OPENAI_API_KEY=sk-...         # GPT-4o, alternativa
-LLM_PROVIDER=groq             # ou "openai"
+LLM_PROVIDER=groq      # groq | openai | ollama
+GROQ_API_KEY=gsk_...   # se LLM_PROVIDER=groq
+OPENAI_API_KEY=sk-...  # se LLM_PROVIDER=openai
 
-# Enriquecimento (opcional, mas recomendado)
-ABUSEIPDB_API_KEY=...
-VIRUSTOTAL_API_KEY=...
-
-# Webhooks (opcional)
-WEBHOOK_URL=https://hooks.slack.com/services/...
-WEBHOOK_MIN_SEVERITY=high     # low | medium | high | critical
+ABUSEIPDB_API_KEY=     # opcional
+VIRUSTOTAL_API_KEY=    # opcional
 ```
 
 ### 2. Subir
@@ -187,10 +175,40 @@ docker-compose up --build
 
 | URL | Descrição |
 |---|---|
-| http://localhost:8000 | Interface principal — Analisar |
-| http://localhost:8000/history.html | Histórico de análises |
-| http://localhost:8000/dashboard.html | Dashboard de métricas |
-| http://localhost:8000/settings.html | Contexto organizacional |
+| `http://localhost:8000` | Analisar logs |
+| `http://localhost:8000/history.html` | Histórico de análises |
+| `http://localhost:8000/dashboard.html` | Dashboard de métricas |
+| `http://localhost:8000/settings.html` | Contexto organizacional |
+
+---
+
+## Modo 100% offline com Ollama
+
+Rode a IA localmente — sem Groq, sem OpenAI, nenhum dado sai da rede.
+
+**1.** No `.env`, defina:
+
+```env
+LLM_PROVIDER=ollama
+OLLAMA_MODEL=qwen2.5:7b   # recomendado para JSON estruturado
+```
+
+**2.** Suba com o profile Ollama:
+
+```bash
+docker-compose --profile ollama up
+```
+
+O modelo é baixado automaticamente na primeira execução e fica em cache no volume `ollama_data`. Reinicializações seguintes são instantâneas.
+
+### Modelos disponíveis
+
+| Modelo | Tamanho | RAM mínima | Indicado para |
+|---|---|---|---|
+| `qwen2.5:7b` | 4.4 GB | 16 GB | **Padrão — melhor JSON estruturado** |
+| `llama3.2:3b` | 2.0 GB | 8 GB | Máquinas com menos recursos |
+| `llama3.1:8b` | 4.7 GB | 16 GB | Alternativa Llama |
+| `mistral:7b` | 4.1 GB | 16 GB | Alternativa sólida |
 
 ---
 
@@ -216,6 +234,7 @@ docker-compose up --build
   </EventData>
 </Event>
 ```
+
 </details>
 
 <details>
@@ -226,6 +245,7 @@ Jan 15 10:30:00 server01 sshd[12345]: Failed password for invalid user admin fro
 Jan 15 10:30:01 server01 sshd[12346]: Failed password for invalid user root from 203.0.113.45 port 22 ssh2
 Jan 15 10:30:02 server01 sshd[12347]: Failed password for invalid user admin from 203.0.113.45 port 22 ssh2
 ```
+
 </details>
 
 <details>
@@ -242,12 +262,13 @@ Jan 15 10:30:02 server01 sshd[12347]: Failed password for invalid user admin fro
   "geo": { "country": "CN", "city": "Shanghai" }
 }
 ```
+
 </details>
 
 <details>
 <summary>Correlação — Múltiplos eventos para análise encadeada</summary>
 
-Cole no modo **Correlação de Logs** (toggle na página principal):
+Use o modo **Correlação de Logs** (toggle na página principal).
 
 **Evento 1 — Reconhecimento:**
 ```
@@ -263,6 +284,7 @@ Jan 15 10:05:00 server01 sshd[1234]: Accepted password for deploy from 203.0.113
 ```
 Jan 15 10:12:00 server01 kernel: OUT=eth0 SRC=10.0.0.5 DST=203.0.113.45 PROTO=TCP DPT=443 LEN=65535
 ```
+
 </details>
 
 ---
@@ -271,27 +293,27 @@ Jan 15 10:12:00 server01 kernel: OUT=eth0 SRC=10.0.0.5 DST=203.0.113.45 PROTO=TC
 
 | Endpoint | Método | Descrição |
 |---|---|---|
-| `/api/analyze` | POST | Análise individual (síncrona) |
-| `/api/analyze/stream` | POST | Análise com streaming SSE |
-| `/api/analyze/batch` | POST | Lote de até 20 logs |
-| `/api/analyze/correlate` | POST | Correlação de 2–10 logs |
-| `/api/history` | GET | Histórico com filtros |
-| `/api/analyses/{id}/diagnosis` | PATCH | Registrar FP/VP/Inconclusivo |
-| `/api/org-config` | GET/PUT | Contexto organizacional |
-| `/api/stats` | GET | Métricas do dashboard |
-| `/health` | GET | Health check |
+| `/api/analyze` | `POST` | Análise individual (síncrona) |
+| `/api/analyze/stream` | `POST` | Análise com streaming SSE |
+| `/api/analyze/batch` | `POST` | Lote de até 20 logs |
+| `/api/analyze/correlate` | `POST` | Correlação de 2–10 logs |
+| `/api/history` | `GET` | Histórico com filtros |
+| `/api/analyses/{id}/diagnosis` | `PATCH` | Registrar FP / VP / Inconclusivo |
+| `/api/org-config` | `GET` / `PUT` | Contexto organizacional |
+| `/api/stats` | `GET` | Métricas do dashboard |
+| `/health` | `GET` | Health check |
 
 ---
 
 ## Segurança
 
-- Secrets exclusivamente via variáveis de ambiente — nunca hardcoded
+- Secrets via variáveis de ambiente — nunca hardcoded
 - Input sanitizado: null bytes e tentativas de injection bloqueadas
 - Rate limiting: 10 req/min por IP (configurável via `RATE_LIMIT_PER_MINUTE`)
-- Logs de aplicação não registram conteúdo dos logs do usuário
+- Logs de aplicação não registram o conteúdo dos logs do usuário
 - `INTERNAL_API_SECRET` autentica comunicação entre containers
-- Usuário não-root em todos os containers Docker
-- Rede interna Docker isola os serviços — apenas o gateway é exposto
+- Usuário não-root em todos os containers
+- Rede Docker interna isola os serviços — apenas o gateway é exposto
 
 ---
 
@@ -302,42 +324,42 @@ vestigo/
 ├── docker-compose.yml
 ├── .env.example
 │
-├── gateway/                    # Orquestrador + frontend estático
+├── gateway/                     # Orquestrador + frontend
 │   └── app/
-│       ├── main.py             # Endpoints, SSE, rate limit
-│       ├── database.py         # PostgreSQL (análises, diagnósticos, config)
-│       ├── webhook.py          # Alertas Slack/Teams
-│       └── static/             # Frontend SPA
-│           ├── index.html      # Análise + Correlação
-│           ├── history.html    # Histórico com busca
-│           ├── dashboard.html  # Métricas Chart.js
-│           ├── settings.html   # Contexto organizacional
-│           ├── app.js          # Lógica frontend
-│           └── style.css       # Design system dark SOC
+│       ├── main.py              # Endpoints, SSE, rate limit
+│       ├── database.py          # PostgreSQL — análises, diagnósticos, config
+│       ├── webhook.py           # Alertas Slack / Teams
+│       └── static/
+│           ├── index.html       # Análise individual + Correlação
+│           ├── history.html     # Histórico com busca e filtros
+│           ├── dashboard.html   # Métricas com Chart.js
+│           ├── settings.html    # Contexto organizacional
+│           ├── app.js           # Lógica frontend
+│           └── style.css        # Design system dark SOC
 │
-├── parser-service/             # Módulo 1: Parse + mascaramento
+├── parser-service/              # Módulo 1 — Parse e mascaramento
 │   └── app/
-│       ├── detector.py         # Detecção de formato de log
-│       ├── masker.py           # PII masking
-│       ├── ioc_extractor.py    # Extração de IPs, hashes, domínios
-│       └── parsers/            # Windows Event, Syslog, JSON, CEF
+│       ├── detector.py          # Detecção de formato
+│       ├── masker.py            # PII masking
+│       ├── ioc_extractor.py     # Extração de IPs, hashes, domínios
+│       └── parsers/             # Windows Event, Syslog, JSON, CEF
 │
-├── enricher-service/           # Módulo 2: Enriquecimento
+├── enricher-service/            # Módulo 2 — Enriquecimento
 │   └── app/
-│       ├── cache.py            # Cache TTL em memória
-│       ├── severity.py         # Scoring de severidade
+│       ├── cache.py             # Cache TTL em memória
+│       ├── severity.py          # Scoring de severidade
 │       └── enrichers/
-│           ├── abuseipdb.py    # Reputação de IPs
-│           ├── virustotal.py   # Reputação de hashes/domínios
-│           └── mitre_mapper.py # Mapeamento ATT&CK
+│           ├── abuseipdb.py     # Reputação de IPs
+│           ├── virustotal.py    # Reputação de hashes e domínios
+│           └── mitre_mapper.py  # Mapeamento ATT&CK
 │
-└── ai-service/                 # Módulo 3: IA
+└── ai-service/                  # Módulo 3 — IA
     └── app/
-        ├── llm_client.py       # Cliente Groq / OpenAI
+        ├── llm_client.py        # Cliente Groq / OpenAI / Ollama
         └── prompts/
-            ├── n1.py           # Prompt analista júnior
-            ├── n2n3.py         # Prompt analista sênior
-            └── correlate.py    # Prompt correlação de eventos
+            ├── n1.py            # Prompt analista júnior (N1)
+            ├── n2n3.py          # Prompt analista sênior (N2/N3)
+            └── correlate.py     # Prompt correlação de eventos
 ```
 
 ---
@@ -348,10 +370,9 @@ vestigo/
 |---|---|
 | Backend | Python 3.12, FastAPI, asyncpg |
 | Banco de dados | PostgreSQL 16 |
-| LLM | Groq (LLaMA 3.3 70B) / OpenAI (GPT-4o) |
-| Frontend | HTML/CSS/JS vanilla, Chart.js |
+| LLM | Groq (LLaMA 3.3 70B) / OpenAI (GPT-4o) / Ollama (local) |
+| Frontend | HTML, CSS, JavaScript vanilla, Chart.js |
 | Infra | Docker Compose, slowapi, httpx |
-| Fontes | Inter + JetBrains Mono (Google Fonts) |
 
 ---
 
@@ -366,4 +387,3 @@ MIT — veja [LICENSE](LICENSE) para detalhes.
 *Vestigo · privacidade by design · o log bruto nunca chega à IA*
 
 </div>
-]]>
