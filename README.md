@@ -1,48 +1,154 @@
-# Vestigo — SOC Intelligence Platform
+<![CDATA[<div align="center">
 
-Plataforma de análise de logs e payloads para times de SOC.
-Interpreta logs brutos de segurança e entrega ao analista: o que aconteceu, o quanto é crítico e o que fazer agora.
+<br/>
 
-**Diferencial:** privacidade by design — o log bruto **nunca** chega à IA. Apenas um JSON de contexto mascarado e enriquecido é enviado ao modelo.
+```
+██╗   ██╗███████╗███████╗████████╗██╗ ██████╗  ██████╗
+██║   ██║██╔════╝██╔════╝╚══██╔══╝██║██╔════╝ ██╔═══██╗
+██║   ██║█████╗  ███████╗   ██║   ██║██║  ███╗██║   ██║
+╚██╗ ██╔╝██╔══╝  ╚════██║   ██║   ██║██║   ██║██║   ██║
+ ╚████╔╝ ███████╗███████║   ██║   ██║╚██████╔╝╚██████╔╝
+  ╚═══╝  ╚══════╝╚══════╝   ╚═╝   ╚═╝ ╚═════╝  ╚═════╝
+```
+
+**SOC Intelligence Platform**
+
+*Análise de logs de segurança com IA — privacidade by design*
+
+<br/>
+
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat-square&logo=docker&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white)
+![LLM](https://img.shields.io/badge/LLM-Groq%20%2F%20OpenAI-FF6B35?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)
+
+</div>
+
+---
+
+## O que é o Vestigo?
+
+O Vestigo é uma plataforma de análise de logs de segurança para times de SOC. Você cola um log bruto — Windows Event XML, Syslog, JSON, CEF — e a plataforma entrega em segundos:
+
+- **O que aconteceu** em linguagem clara
+- **Qual a severidade real** (low / medium / high / critical)
+- **O que fazer agora** — ações imediatas por perfil de analista
+- **Mapeamento MITRE ATT&CK** com técnica e tática
+- **Queries prontas** para KQL (Sentinel/Defender) e SPL (Splunk)
+- **IoCs extraídos** — IPs, hashes, domínios, URLs
+
+> **Diferencial:** privacidade by design — o log bruto **nunca** chega à IA. Apenas um JSON de contexto estruturado e mascarado é enviado ao modelo.
+
+---
+
+## Funcionalidades
+
+### Análise
+
+| Recurso | Descrição |
+|---|---|
+| 🔍 **Análise individual** | Streaming SSE com indicador de progresso por etapa |
+| 🔗 **Correlação de logs** | Analisa 2–10 logs juntos e detecta ataques coordenados |
+| 📊 **Perfil N1** | Linguagem simples, ações imediatas, indicação de escalonamento |
+| 🎯 **Perfil N2/N3** | Análise forense, cadeia de ataque, pivôs de investigação, containment |
+| 📦 **Batch** | Análise em lote de até 20 logs via API |
+
+### Enriquecimento
+
+| Recurso | Descrição |
+|---|---|
+| 🌐 **AbuseIPDB** | Reputação de IPs com cache TTL para não esgotar cota |
+| 🦠 **VirusTotal** | Reputação de hashes e domínios |
+| 🛡️ **MITRE ATT&CK** | Mapeamento automático de técnica e tática |
+| ⚖️ **Score de severidade** | Cálculo próprio com contexto organizacional |
+
+### Operacional
+
+| Recurso | Descrição |
+|---|---|
+| 📝 **Diagnóstico do analista** | Registre FP / VP / Inconclusivo com nota — alimenta o contexto histórico |
+| 🏢 **Contexto organizacional** | Configure CIDRs internos, IPs confiáveis e ferramentas autorizadas para reduzir falsos positivos |
+| 🔔 **Webhooks** | Alertas automáticos para Slack e Teams por severidade mínima configurável |
+| 📈 **Dashboard** | Métricas de volume, distribuição de severidade e top técnicas MITRE |
+| 🔎 **Histórico com busca** | Filtre por IoC, MITRE, severidade e diagnóstico |
+| 💾 **Exportação** | JSON e PDF de qualquer análise |
 
 ---
 
 ## Arquitetura
 
 ```
-Browser → Gateway (8000)
-             ├── POST /parse  → parser-service  (8001)
-             ├── POST /enrich → enricher-service (8002)
-             └── POST /analyze → ai-service     (8003)
-                                    └── Groq / OpenAI API
+┌─────────────────────────────────────────────────────────────┐
+│                         Browser                             │
+│              http://localhost:8000                           │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+              ┌────────▼────────┐
+              │    Gateway      │  FastAPI · Rate limiting · SSE
+              │    :8000        │  PostgreSQL · Webhooks
+              └──┬──────┬──┬───┘
+                 │      │  │
+        ┌────────▼──┐   │  └────────────────┐
+        │  Parser   │   │                   │
+        │  :8001    │   │            ┌──────▼──────┐
+        │           │   │            │  AI Service  │
+        │ • Detecta │   │            │  :8003       │
+        │   formato │   │            │              │
+        │ • Mascara │   │            │ • Groq LLaMA │
+        │   PII     │   │            │   3.3 70B    │
+        │ • Extrai  │   │            │ • OpenAI     │
+        │   IoCs    │   │            │   GPT-4o     │
+        └────────┬──┘   │            └─────────────┘
+                 │      │
+          ┌──────▼──────▼─┐
+          │   Enricher    │
+          │   :8002       │
+          │               │
+          │ • AbuseIPDB   │
+          │ • VirusTotal  │
+          │ • MITRE map   │
+          │ • Severidade  │
+          └───────────────┘
 ```
 
-### Módulos
+### Fluxo de privacidade
 
-| Serviço | Responsabilidade |
-|---------|-----------------|
-| `gateway` | Orquestração, rate limiting, servir frontend |
-| `parser-service` | Detectar formato, extrair campos, mascarar PII |
-| `enricher-service` | AbuseIPDB, VirusTotal, MITRE mapping, severidade |
-| `ai-service` | Prompt estruturado por perfil → LLM → resposta |
-| `postgres` | Persistência (fase futura) |
-
-### Formatos de log suportados
-
-- Windows Event Log (XML e JSON)
-- Syslog RFC 3164 e RFC 5424
-- JSON genérico de segurança (Defender, Sentinel, CloudTrail, etc.)
-- CEF / LEEF (detecção de formato, parse básico)
-- Texto livre (fallback)
+```
+Log bruto → [Parser] ──────────────────────────────────────────┐
+                                                                │
+             Mascaramento PII                                   │
+             ├── IPs internos    →  [IP_INTERNO]               │
+             ├── Emails          →  [EMAIL]                    │
+             ├── Tokens/senhas   →  [CREDENTIAL]               │
+             └── CPF / dados PII →  [PII]                      │
+                                                                │
+             JSON estruturado → [Enricher] → [AI Service] ─────┘
+             (log bruto NUNCA enviado à IA)
+```
 
 ---
 
-## Como rodar
+## Formatos de log suportados
+
+| Formato | Exemplos |
+|---|---|
+| Windows Event Log | XML (4625, 4688, 4720…), JSON do Defender |
+| Syslog | RFC 3164, RFC 5424 |
+| JSON genérico | Microsoft Sentinel, AWS CloudTrail, Elastic |
+| CEF / LEEF | ArcSight, QRadar |
+| Texto livre | Qualquer log não estruturado (fallback) |
+
+---
+
+## Início rápido
 
 ### Pré-requisitos
 
-- Docker Desktop (ou Docker + docker-compose)
-- Chaves de API (mínimo: Groq ou OpenAI para o módulo de IA)
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (ou Docker + Compose)
+- Chave de API: [Groq](https://console.groq.com) *(gratuito, recomendado)* ou [OpenAI](https://platform.openai.com)
+- Opcional: [AbuseIPDB](https://www.abuseipdb.com/api) e [VirusTotal](https://developers.virustotal.com)
 
 ### 1. Configurar variáveis de ambiente
 
@@ -50,23 +156,28 @@ Browser → Gateway (8000)
 cp .env.example .env
 ```
 
-Edite `.env` e preencha:
+Edite `.env`:
 
 ```env
+# Segurança interna
 INTERNAL_API_SECRET=<gere com: python -c "import secrets; print(secrets.token_hex(32))">
 POSTGRES_PASSWORD=<senha forte>
 
-# Escolha pelo menos uma:
-GROQ_API_KEY=<sua chave Groq>      # recomendado (LLaMA 3.3 70B, gratuito)
-OPENAI_API_KEY=<sua chave OpenAI>  # alternativa (GPT-4o)
-LLM_PROVIDER=groq                   # ou "openai"
+# LLM — escolha pelo menos um
+GROQ_API_KEY=gsk_...          # LLaMA 3.3 70B, plano gratuito disponível
+OPENAI_API_KEY=sk-...         # GPT-4o, alternativa
+LLM_PROVIDER=groq             # ou "openai"
 
-# Enriquecimento (opcional no MVP, mas recomendado):
-ABUSEIPDB_API_KEY=<sua chave>
-VIRUSTOTAL_API_KEY=<sua chave>
+# Enriquecimento (opcional, mas recomendado)
+ABUSEIPDB_API_KEY=...
+VIRUSTOTAL_API_KEY=...
+
+# Webhooks (opcional)
+WEBHOOK_URL=https://hooks.slack.com/services/...
+WEBHOOK_MIN_SEVERITY=high     # low | medium | high | critical
 ```
 
-### 2. Subir os containers
+### 2. Subir
 
 ```bash
 docker-compose up --build
@@ -74,19 +185,19 @@ docker-compose up --build
 
 ### 3. Acessar
 
-Abra **http://localhost:8000** no navegador.
-
-Para verificar saúde dos serviços:
-```bash
-curl http://localhost:8000/health
-curl http://localhost:8000/api/analyze  # 405 Method Not Allowed = serviço ok
-```
+| URL | Descrição |
+|---|---|
+| http://localhost:8000 | Interface principal — Analisar |
+| http://localhost:8000/history.html | Histórico de análises |
+| http://localhost:8000/dashboard.html | Dashboard de métricas |
+| http://localhost:8000/settings.html | Contexto organizacional |
 
 ---
 
 ## Exemplos de log para teste
 
-### Windows Event — Logon Failure (Event ID 4625)
+<details>
+<summary>Windows Event — Logon failure (Event ID 4625)</summary>
 
 ```xml
 <Event xmlns="http://schemas.microsoft.com/win/2004/08/events/event">
@@ -105,20 +216,20 @@ curl http://localhost:8000/api/analyze  # 405 Method Not Allowed = serviço ok
   </EventData>
 </Event>
 ```
+</details>
 
-### Syslog RFC 3164 — SSH brute force
+<details>
+<summary>Syslog — SSH brute force</summary>
 
 ```
 Jan 15 10:30:00 server01 sshd[12345]: Failed password for invalid user admin from 203.0.113.45 port 22 ssh2
+Jan 15 10:30:01 server01 sshd[12346]: Failed password for invalid user root from 203.0.113.45 port 22 ssh2
+Jan 15 10:30:02 server01 sshd[12347]: Failed password for invalid user admin from 203.0.113.45 port 22 ssh2
 ```
+</details>
 
-### Syslog RFC 5424
-
-```
-<34>1 2024-01-15T10:30:00Z web-server nginx 1234 - - Failed password for user admin from 198.51.100.10 port 443
-```
-
-### JSON genérico
+<details>
+<summary>JSON genérico — Autenticação suspeita</summary>
 
 ```json
 {
@@ -127,74 +238,132 @@ Jan 15 10:30:00 server01 sshd[12345]: Failed password for invalid user admin fro
   "src_ip": "203.0.113.45",
   "user": "root",
   "status": "failed",
-  "source": "auth.log"
+  "source": "auth.log",
+  "geo": { "country": "CN", "city": "Shanghai" }
 }
 ```
+</details>
+
+<details>
+<summary>Correlação — Múltiplos eventos para análise encadeada</summary>
+
+Cole no modo **Correlação de Logs** (toggle na página principal):
+
+**Evento 1 — Reconhecimento:**
+```
+Jan 15 10:00:00 fw01 kernel: DROP IN=eth0 SRC=203.0.113.45 DST=10.0.0.1 PROTO=TCP DPT=22
+```
+
+**Evento 2 — Acesso inicial:**
+```
+Jan 15 10:05:00 server01 sshd[1234]: Accepted password for deploy from 203.0.113.45 port 49201 ssh2
+```
+
+**Evento 3 — Exfiltração:**
+```
+Jan 15 10:12:00 server01 kernel: OUT=eth0 SRC=10.0.0.5 DST=203.0.113.45 PROTO=TCP DPT=443 LEN=65535
+```
+</details>
 
 ---
 
-## Segurança do MVP
+## API Reference
 
-- Secrets exclusivamente via variáveis de ambiente (nunca hardcoded)
-- Input sanitizado: null bytes, tentativas de injection bloqueadas
+| Endpoint | Método | Descrição |
+|---|---|---|
+| `/api/analyze` | POST | Análise individual (síncrona) |
+| `/api/analyze/stream` | POST | Análise com streaming SSE |
+| `/api/analyze/batch` | POST | Lote de até 20 logs |
+| `/api/analyze/correlate` | POST | Correlação de 2–10 logs |
+| `/api/history` | GET | Histórico com filtros |
+| `/api/analyses/{id}/diagnosis` | PATCH | Registrar FP/VP/Inconclusivo |
+| `/api/org-config` | GET/PUT | Contexto organizacional |
+| `/api/stats` | GET | Métricas do dashboard |
+| `/health` | GET | Health check |
+
+---
+
+## Segurança
+
+- Secrets exclusivamente via variáveis de ambiente — nunca hardcoded
+- Input sanitizado: null bytes e tentativas de injection bloqueadas
 - Rate limiting: 10 req/min por IP (configurável via `RATE_LIMIT_PER_MINUTE`)
-- Logs de aplicação não registram conteúdo do log do usuário
-- `INTERNAL_API_SECRET` protege comunicação entre containers
-- Usuário não-root em todos os containers
-- Rede Docker interna isola os serviços (apenas gateway exposto)
-
-## Privacidade by design
-
-```
-Log bruto → [parser] → Mascaramento PII → JSON limpo
-                         ↓
-                    IPs internos     → [IP_INTERNO]
-                    Emails           → [EMAIL]
-                    Tokens/segredos  → [TOKEN]
-                    CPF/PII          → [PII]
-                    Senhas           → [CREDENTIAL]
-                         ↓
-               JSON enriquecido → [ai-service] → LLM
-               (sem dado bruto do log original)
-```
+- Logs de aplicação não registram conteúdo dos logs do usuário
+- `INTERNAL_API_SECRET` autentica comunicação entre containers
+- Usuário não-root em todos os containers Docker
+- Rede interna Docker isola os serviços — apenas o gateway é exposto
 
 ---
 
-## Estrutura de pastas
+## Estrutura do projeto
 
 ```
 vestigo/
 ├── docker-compose.yml
 ├── .env.example
-├── gateway/                  # Orquestrador + frontend estático
+│
+├── gateway/                    # Orquestrador + frontend estático
 │   └── app/
-│       ├── main.py
-│       └── static/           # index.html, style.css, app.js
-├── parser-service/           # Módulo 1: Parse + Mascaramento
+│       ├── main.py             # Endpoints, SSE, rate limit
+│       ├── database.py         # PostgreSQL (análises, diagnósticos, config)
+│       ├── webhook.py          # Alertas Slack/Teams
+│       └── static/             # Frontend SPA
+│           ├── index.html      # Análise + Correlação
+│           ├── history.html    # Histórico com busca
+│           ├── dashboard.html  # Métricas Chart.js
+│           ├── settings.html   # Contexto organizacional
+│           ├── app.js          # Lógica frontend
+│           └── style.css       # Design system dark SOC
+│
+├── parser-service/             # Módulo 1: Parse + mascaramento
 │   └── app/
-│       ├── detector.py       # Detecção de formato
-│       ├── masker.py         # PII masking
-│       ├── ioc_extractor.py  # Extração de IoCs
-│       └── parsers/          # Parsers por formato
-├── enricher-service/         # Módulo 2: Enriquecimento
+│       ├── detector.py         # Detecção de formato de log
+│       ├── masker.py           # PII masking
+│       ├── ioc_extractor.py    # Extração de IPs, hashes, domínios
+│       └── parsers/            # Windows Event, Syslog, JSON, CEF
+│
+├── enricher-service/           # Módulo 2: Enriquecimento
 │   └── app/
-│       ├── enrichers/        # AbuseIPDB, VirusTotal, MITRE
-│       └── severity.py       # Cálculo de severidade
-└── ai-service/               # Módulo 3: IA
+│       ├── cache.py            # Cache TTL em memória
+│       ├── severity.py         # Scoring de severidade
+│       └── enrichers/
+│           ├── abuseipdb.py    # Reputação de IPs
+│           ├── virustotal.py   # Reputação de hashes/domínios
+│           └── mitre_mapper.py # Mapeamento ATT&CK
+│
+└── ai-service/                 # Módulo 3: IA
     └── app/
-        ├── llm_client.py     # Cliente Groq/OpenAI
-        └── prompts/          # Prompts por perfil (N1, N2/N3)
+        ├── llm_client.py       # Cliente Groq / OpenAI
+        └── prompts/
+            ├── n1.py           # Prompt analista júnior
+            ├── n2n3.py         # Prompt analista sênior
+            └── correlate.py    # Prompt correlação de eventos
 ```
 
 ---
 
-## Roadmap (pós-MVP)
+## Stack
 
-- [ ] Autenticação de usuários (JWT)
-- [ ] Histórico de análises (PostgreSQL)
-- [ ] Exportação PDF de relatórios
-- [ ] Correlação de múltiplos logs
-- [ ] Integração com SIEM (webhooks)
-- [ ] Suporte a LEEF completo, CloudTrail, CEF
-- [ ] Perfil Gestor (impacto de negócio)
-- [ ] URLhaus e OTX AlienVault no enricher
+| Camada | Tecnologia |
+|---|---|
+| Backend | Python 3.12, FastAPI, asyncpg |
+| Banco de dados | PostgreSQL 16 |
+| LLM | Groq (LLaMA 3.3 70B) / OpenAI (GPT-4o) |
+| Frontend | HTML/CSS/JS vanilla, Chart.js |
+| Infra | Docker Compose, slowapi, httpx |
+| Fontes | Inter + JetBrains Mono (Google Fonts) |
+
+---
+
+## Licença
+
+MIT — veja [LICENSE](LICENSE) para detalhes.
+
+---
+
+<div align="center">
+
+*Vestigo · privacidade by design · o log bruto nunca chega à IA*
+
+</div>
+]]>
