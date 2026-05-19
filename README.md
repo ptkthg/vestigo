@@ -139,6 +139,18 @@ Log bruto → [Parser] → Mascaramento PII → JSON limpo
 
 ## Início rápido
 
+### Instalação automática (Windows)
+
+```powershell
+.\install.ps1
+```
+
+O script verifica o Docker, gera os secrets automaticamente, pergunta qual provider de IA usar e sobe tudo. Nenhum conhecimento técnico necessário.
+
+---
+
+### Instalação manual
+
 ### Pré-requisitos
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
